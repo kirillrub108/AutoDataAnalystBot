@@ -4,4 +4,8 @@ class ChartStates(StatesGroup):
     waiting_for_file = State()     # бот ждёт файл для графика
 
 class ReportStates(StatesGroup):
-    waiting_for_file = State()     # бот ждёт файл для отчёта
+    waiting_for_file = State()
+    waiting_for_columns = State()
+class AggregateStates(StatesGroup):
+    waiting_for_file = State()
+    waiting_for_column = State()

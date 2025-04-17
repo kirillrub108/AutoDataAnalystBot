@@ -5,7 +5,8 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage  # хранение состояний в памяти
 
 from config import API_TOKEN
-from commands import start, chart, report
+from middlewares.cleanup import CleanupMiddleware
+from commands import start, cancel, chart, report, aggregate
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,9 +17,10 @@ bot = Bot(
 )
 storage = MemoryStorage()  # хранит состояния в памяти; теряется при перезапуске :contentReference[oaicite:0]{index=0}
 dp = Dispatcher(storage=storage)
+dp.message.middleware(CleanupMiddleware())
 
 # Регистрируем все роутеры (в том числе те, что будут работать в состоянии)
-dp.include_routers(start.router, chart.router, report.router)
+dp.include_routers(start.router, cancel.router, chart.router, report.router, aggregate.router)
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
