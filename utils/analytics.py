@@ -86,9 +86,12 @@ async def analyze_columns(message: Message, df: pd.DataFrame, df_columns: list, 
                 iqr = q3 - q1
                 lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
                 outliers = column_data[(column_data < lower) | (column_data > upper)].count()
+                mode = column_data.mode().tolist()
+                mode_display = ', '.join(map(str, mode)) if mode else '–'
                 parts += [
                     f"  – Среднее: {round(stats['mean'], 2)}",
                     f"  – Медиана: {round(column_data.median(), 2)}",
+                    f"  – Мода: {mode_display}",
                     f"  – Мин: {round(stats['min'], 2)}",
                     f"  – Макс: {round(stats['max'], 2)}",
                     f"  – Ст. отклонение: {round(stats['std'], 2)}",
