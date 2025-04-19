@@ -1,12 +1,13 @@
 import os
+import pandas as pd
 
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
-from utils.file_processing import save_temp_file, remove_temp_directory
-from utils.correlation_logic import get_columns_list, build_correlation_plot
+from utils.file_processing import save_temp_file, remove_temp_directory_by_file, remove_temp_directory_by_msg, get_columns_list, get_numeric_columns
+from utils.correlation_logic import build_correlation_plot
 
 router = Router()
 
@@ -19,7 +20,8 @@ class CorrelationStates(StatesGroup):
 async def cmd_correlation(message: Message, state: FSMContext):
     await state.set_state(CorrelationStates.waiting_for_file)
     await message.answer(
-        "📈 Пришлите Excel-файл (.xlsx), чтобы построить диаграмму корреляции между двумя числовыми столбцами.",
+        "📈 Пришлите Excel-файл (.xlsx), чтобы построить диаграмму корреляции между двумя числовыми столбцами.\n"
+        "🔹Отправьте /cancel для *отмены*.",
         reply_markup=ReplyKeyboardRemove()
     )
 
@@ -32,28 +34,32 @@ async def handle_file(message: Message, state: FSMContext):
         return
 
     try:
-        columns = get_columns_list(file_path)
+        columns = get_numeric_columns(file_path)
     except Exception as e:
-        remove_temp_directory(file_path)
+        remove_temp_directory_by_file(file_path)
         await message.answer(f"❌ Ошибка при чтении Excel-файла: {e}")
         await state.clear()
         return
 
     if len(columns) < 2:
-        remove_temp_directory(file_path)
-        await message.answer("⚠️ В файле должно быть хотя бы два столбца.")
+        remove_temp_directory_by_file(file_path)
+        await message.answer("⚠️ В файле должно быть хотя бы два числовых столбца.")
         await state.clear()
         return
 
     await state.update_data(file_path=file_path, columns=columns)
 
+    # Группируем кнопки по 3 в ряд
+    keyboard_buttons = [KeyboardButton(text=col) for col in columns]
+    grouped_buttons = [keyboard_buttons[i:i + 3] for i in range(0, len(keyboard_buttons), 3)]
+
     keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=col)] for col in columns],
+        keyboard=grouped_buttons,
         resize_keyboard=True
     )
 
     await state.set_state(CorrelationStates.waiting_for_first_column)
-    await message.answer("🔹 Выберите *первый* столбец:", reply_markup=keyboard)
+    await message.answer("🔹 Выберите *первый* числовой столбец:", reply_markup=keyboard)
 
 @router.message(CorrelationStates.waiting_for_first_column)
 async def handle_first_column(message: Message, state: FSMContext):
@@ -111,6 +117,7 @@ async def handle_second_column(message: Message, state: FSMContext):
         os.remove(file_path)
     await state.clear()
     await message.answer(
-        "✅ Готово! Для нового анализа отправьте /correlation",
+        "✅ Готово! Для нового анализа отправьте /correlation\n"
+        "🔹Отправьте /cancel для *отмены*.",
         reply_markup=ReplyKeyboardRemove()
     )

@@ -3,10 +3,6 @@ import matplotlib.pyplot as plt
 import uuid
 import os
 
-def get_columns_list(file_path: str) -> list[str]:
-    df = pd.read_excel(file_path)
-    return df.columns.tolist()
-
 def build_correlation_plot(file_path: str, col1: str, col2: str) -> str:
     df = pd.read_excel(file_path)
 

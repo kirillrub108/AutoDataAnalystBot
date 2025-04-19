@@ -1,10 +1,22 @@
 import os
+import pandas as pd
 import shutil
 from uuid import uuid4
 
 TEMP_DIR = "temp_files"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+def get_columns_list(file_path: str) -> list[str]:
+    df = pd.read_excel(file_path)
+    return df.columns.tolist()
+
+def get_numeric_columns(file_path: str) -> list[str]:
+    df = pd.read_excel(file_path)
+
+    # Выбираем только числовые столбцы
+    numeric_df = df.select_dtypes(include=['number'])
+
+    return numeric_df.columns.tolist()
 
 async def save_temp_file(message):
     user_id = message.from_user.id  # Получаем уникальный user_id
@@ -23,7 +35,16 @@ async def save_temp_file(message):
     return file_path
 
 
-def remove_temp_directory(message):
+def remove_temp_directory_by_file(file_path: str):
+    """
+    Удаляет временную директорию, в которой находится переданный файл.
+    """
+    temp_dir = os.path.dirname(file_path)
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+
+def remove_temp_directory_by_msg(message):
     user_id = message.from_user.id
     user_temp_dir = os.path.join(TEMP_DIR, str(user_id))
     if os.path.exists(user_temp_dir) and os.path.isdir(user_temp_dir):

@@ -10,7 +10,7 @@ from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 import pandas as pd
 from states import AggregateStates
-from utils.file_processing import save_temp_file, remove_temp_directory
+from utils.file_processing import save_temp_file
 
 # Автоматическое определение колонок по ключевым словам
 def detect_columns(df: pd.DataFrame) -> dict:

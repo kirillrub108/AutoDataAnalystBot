@@ -1,7 +1,7 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-from utils.file_processing import remove_temp_directory
+from utils.file_processing import remove_temp_directory_by_msg
 
 
 class CleanupMiddleware(BaseMiddleware):
@@ -10,7 +10,7 @@ class CleanupMiddleware(BaseMiddleware):
         current_state = await state.get_state()
 
         if event.text and event.text.startswith("/") and current_state:
-            remove_temp_directory(event)
+            remove_temp_directory_by_msg(event)
             await state.clear()
 
         return await handler(event, data)

@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 import pandas as pd
 from states import AggregateStates
 from utils.analytics import analyze_columns
-from utils.file_processing import save_temp_file, remove_temp_directory
+from utils.file_processing import save_temp_file, remove_temp_directory_by_file, remove_temp_directory_by_msg, get_columns_list
 
 router = Router()
 
@@ -25,8 +25,7 @@ async def process_file(message: Message, state: FSMContext):
         return
 
     try:
-        df = pd.read_excel(file_path)
-        columns_list = df.columns.tolist()
+        columns_list = get_columns_list(file_path)
         columns_text = "\n".join([f"• {col}" for col in columns_list])
         await state.update_data(file_path=file_path, df_columns=columns_list)
         await state.set_state(AggregateStates.waiting_for_column)
@@ -39,7 +38,7 @@ async def process_file(message: Message, state: FSMContext):
             "🔹Отправьте /cancel для *отмены*."
         )
     except Exception as e:
-        remove_temp_directory(file_path)
+        remove_temp_directory_by_file(file_path)
         await message.answer(f"❌ Ошибка при чтении файла: {e}")
         await state.clear()
 
