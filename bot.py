@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage  # хранение сос�
 
 from config import API_TOKEN
 from middlewares.cleanup import CleanupMiddleware
-from commands import start, cancel, chart, report, aggregate
+from commands import start, cancel, correlation, report, aggregate
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,7 +20,7 @@ dp = Dispatcher(storage=storage)
 dp.message.middleware(CleanupMiddleware())
 
 # Регистрируем все роутеры (в том числе те, что будут работать в состоянии)
-dp.include_routers(start.router, cancel.router, chart.router, report.router, aggregate.router)
+dp.include_routers(start.router, cancel.router, correlation.router, report.router, aggregate.router)
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
