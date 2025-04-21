@@ -1,42 +1,122 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from io import BytesIO
-from .file_processing import save_temp_file, remove_temp_directory
+import numpy as np
+import uuid
+import os
 
-async def generate_chart_image(message):
-    path = await save_temp_file(message)
-    if not path:
-        return "Ошибка: отправь корректный .xlsx файл."
-    try:
-        df = pd.read_excel(path)
-        plt.figure(figsize=(10, 6))
+def build_correlation_plot(file_path: str, col1: str, col2: str) -> str:
+    df = pd.read_excel(file_path)
 
-        # 1. Если есть дата — строим временной ряд
-        date_cols = [c for c in df.columns if 'date' in c.lower() or 'дат' in c.lower()]
-        if date_cols:
-            dc = date_cols[0]
-            df[dc] = pd.to_datetime(df[dc], errors='coerce')
-            df = df.dropna(subset=[dc]).sort_values(dc)
-            num = df.select_dtypes('number').columns
-            if num.any():
-                sns.lineplot(x=dc, y=num[0], data=df, marker='o')
-                plt.title(f"Тренд: {num[0]} по {dc}")
+    if col1 not in df.columns or col2 not in df.columns:
+        raise ValueError("Один или оба выбранных столбца не найдены.")
+    if not pd.api.types.is_numeric_dtype(df[col1]) or not pd.api.types.is_numeric_dtype(df[col2]):
+        raise ValueError("Оба столбца должны содержать числовые значения.")
 
-        else:
-            # 2. Корреляционная матрица
-            corr = df.select_dtypes('number').corr()
-            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm")
-            plt.title("Корреляционная матрица")
+    # Оставляем только нужные столбцы, заменяем бесконечности на NaN и убираем их
+    df = df[[col1, col2]].replace([np.inf, -np.inf], np.nan).dropna()
 
-        buf = BytesIO()
-        plt.tight_layout()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-        plt.close()
-        return buf
+    # Проверка: есть ли после очистки хоть какие-то данные
+    if df.empty:
+        raise ValueError("Нет достаточных данных для построения графика.")
 
-    except Exception as e:
-        return f"Ошибка при построении графика: {e}"
-    finally:
-        remove_temp_file(path)
+    x = df[col1]
+    y = df[col2]
+
+    # Расчёт коэффициентов линии тренда
+    slope, intercept = np.polyfit(x, y, 1)
+    trend_line = slope * x + intercept
+
+    # Создаём фигуру и оси
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Сетка
+    ax.grid(
+        True,
+        which='major',
+        linestyle='--',
+        linewidth=0.5,
+        alpha=0.7,
+        zorder=0
+    )
+
+    # Точки
+    ax.scatter(
+        x,
+        y,
+        c='darkblue',
+        alpha=0.7,
+        edgecolor='white',
+        linewidth=0.5,
+        zorder=1
+    )
+
+    # Линия тренда
+    ax.plot(
+        x,
+        trend_line,
+        color='crimson',
+        linewidth=2,
+        label='Линия тренда',
+        zorder=2
+    )
+
+    # Подписи и легенда
+    ax.set_title(f"Корреляция: {col1} и {col2}", pad=15)
+    ax.set_xlabel(col1)
+    ax.set_ylabel(col2)
+    ax.legend()
+
+    # Плотная компоновка
+    plt.tight_layout()
+
+    # Сохранение
+    temp_dir = os.path.dirname(file_path)
+    os.makedirs(temp_dir, exist_ok=True)
+    filename = f"plot_{uuid.uuid4().hex}.png"
+    path = os.path.join(temp_dir, filename)
+    fig.savefig(path)
+    plt.close(fig)
+
+    return path
+
+def build_time_series_plot(file_path: str, date_col: str, value_col: str) -> str:
+    df = pd.read_excel(file_path)
+
+    if date_col not in df.columns or value_col not in df.columns:
+        raise ValueError("Указанные столбцы не найдены в данных.")
+
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    df = df.dropna(subset=[date_col, value_col])
+    df = df.sort_values(by=date_col)
+
+    x = df[date_col]
+    y = pd.to_numeric(df[value_col], errors='coerce')
+
+    # Удаление NaN значений
+    mask = y.notna()
+    x = x[mask]
+    y = y[mask]
+
+    # Преобразование дат в числовой формат для расчета линии тренда
+    x_numeric = x.map(pd.Timestamp.toordinal)
+    z = np.polyfit(x_numeric, y, 1)
+    p = np.poly1d(z)
+    trend = p(x_numeric)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(x, y, label='Значения', color='blue')
+    ax.plot(x, trend, label='Тренд', color='red', linestyle='--')
+    ax.set_title(f'Временной ряд: {value_col} по {date_col}')
+    ax.set_xlabel('Дата')
+    ax.set_ylabel(value_col)
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+
+    filename = f"time_series_{uuid.uuid4().hex}.png"
+    path = os.path.join(os.path.dirname(file_path), filename)
+    fig.savefig(path)
+    plt.close(fig)
+
+    return path

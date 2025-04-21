@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import uuid
 from typing import Tuple
 from aiogram.types import Message
 from aiogram import Router, F
@@ -10,30 +11,7 @@ from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 import pandas as pd
 from states import AggregateStates
-from utils.file_processing import save_temp_file
-
-# Автоматическое определение колонок по ключевым словам
-def detect_columns(df: pd.DataFrame) -> dict:
-    columns = {
-        'date_col': None,
-        'price_col': None,
-        'quantity_col': None,
-        'category_col': None,
-        'product_col': None
-    }
-    for col in df.columns:
-        col_lower = col.lower()
-        if any(word in col_lower for word in ['дата', 'date']):
-            columns['date_col'] = col
-        if any(word in col_lower for word in ['цена', 'price']):
-            columns['price_col'] = col
-        if any(word in col_lower for word in ['количество', 'quantity']):
-            columns['quantity_col'] = col
-        if any(word in col_lower for word in ['категория', 'category']):
-            columns['category_col'] = col
-        if any(word in col_lower for word in ['товар', 'product']):
-            columns['product_col'] = col
-    return columns
+from utils.file_processing import save_temp_file, get_numeric_columns, detect_columns
 
 async def analyze_columns(message: Message, df: pd.DataFrame, df_columns: list, text: str):
     text = text.strip()
@@ -108,47 +86,117 @@ async def analyze_columns(message: Message, df: pd.DataFrame, df_columns: list, 
 
         await message.answer("\n".join(parts), parse_mode="Markdown")
 
-async def generate_report(file_path: str, date_col: str, analyze_cols: list, group_by: str) -> Tuple[str, list]:
+def generate_report(file_path: str) -> Tuple[str, list]:
+    """
+    Генерирует текстовый отчет и список путей к сохраненным диаграммам.
+    Бизнес‑метрики:
+     - общая информация о DataFrame
+     - пропуски/уникальности
+     - описательные статистики для числовых столбцов
+     - частотный анализ для категориальных
+     - выручка (price*quantity): total, mean, median, max
+     - временные метрики (первые/последние даты) если есть date_col
+     - топ‑5 продуктов и категорий по выручке
+     - сохраняет два графика: выручка по категориям и топ‑5 продуктов
+    """
     plots = []
     try:
         df = pd.read_excel(file_path)
         if df.empty:
             return "❌ Файл пустой.", []
 
+        report = ["📈 *Аналитический отчёт по файлу:*"]
+        report.append(f"• Строк: {len(df)}, Столбцов: {len(df.columns)}")
+
+        # Пропуски и уникальности
+        report.append("\n*Пропуски и уникальности:*")
+        for col in df.columns:
+            miss = df[col].isna().sum()
+            uniq = df[col].nunique(dropna=True)
+            report.append(f"  • {col}: пропущено {miss}, уникальных {uniq}")
+
+        # Описательные статистики для числовых
+        num_cols = get_numeric_columns(file_path)
+        if num_cols:
+            report.append("\n*Числовые столбцы — описательная статистика:*")
+            desc = df[num_cols].describe().T
+            for col, row in desc.iterrows():
+                report.append(
+                    f"  • {col}: среднее={row['mean']:.2f}, медиана={df[col].median():.2f}, \n"
+                    f"ст. отклонение={row['std']:.2f}, мин={row['min']:.2f}, макс={row['max']:.2f}"
+                )
+
+        # Частотный анализ категорий
+        cat_cols = [c for c in df.columns if c not in num_cols]
+        if cat_cols:
+            report.append("\n*Категориальные столбцы — топ‑5 по частоте:*")
+            for col in cat_cols:
+                top5 = df[col].value_counts(dropna=False).head(5)
+                report.append(f"  • {col}:")
+                for val, cnt in top5.items():
+                    disp = val if pd.notna(val) else "<пусто>"
+                    report.append(f"      – {disp}: {cnt}")
+
+        # Детектируем специальные поля
         detected = detect_columns(df)
-        report = ["📈 *Аналитический отчет:*"]
+        price_col = detected.get('price_col')
+        qty_col   = detected.get('quantity_col')
+        date_col  = detected.get('date_col')
+        prod_col  = detected.get('product_col')
+        cat_col   = detected.get('category_col')
 
-        # Расчет выручки, если есть цена и количество
-        if detected['price_col'] and detected['quantity_col']:
-            df['Выручка'] = df[detected['price_col']] * df[detected['quantity_col']]
-            analyze_cols.append('Выручка')
+        # Выручка
+        if price_col and qty_col:
+            df['Выручка'] = (
+                pd.to_numeric(df[price_col], errors='coerce') *
+                pd.to_numeric(df[qty_col], errors='coerce')
+            )
+            rev = df['Выручка'].dropna()
+            report.append("\n*Метрики по выручке:*")
+            report.append(f"  • Общая: {rev.sum():.2f}")
+            report.append(f"  • Средняя: {rev.mean():.2f}")
+            report.append(f"  • Медиана: {rev.median():.2f}")
+            report.append(f"  • Максимум: {rev.max():.2f}")
 
-        # Группировка данных
-        if group_by and detected['date_col']:
-            df[detected['date_col']] = pd.to_datetime(df[detected['date_col']], errors='coerce')
-            df['Месяц'] = df[detected['date_col']].dt.to_period('M')
-            grouped = df.groupby([group_by, 'Месяц'])[analyze_cols].agg(['sum', 'mean'])
-            report.append(f"\n📅 *Динамика по {group_by}:*\n```{grouped.head().to_string()}```")
+            # Диаграмма выручки по категориям
+            if cat_col:
+                agg_cat = rev.groupby(df[cat_col]).sum().sort_values()
+                fig, ax = plt.subplots(figsize=(8,5))
+                sns.barplot(x=agg_cat.values, y=agg_cat.index.astype(str), ax=ax)
+                ax.set_title("Выручка по категориям")
+                plt.tight_layout()
+                path_cat = os.path.join(
+                    os.path.dirname(file_path),
+                    f"rev_by_cat_{uuid.uuid4().hex}.png"
+                )
+                fig.savefig(path_cat); plt.close(fig)
+                plots.append(path_cat)
 
-        # Топ-5 товаров по выручке
-        if 'Выручка' in df.columns and detected['product_col']:
-            top_products = df.nlargest(5, 'Выручка')[[detected['product_col'], 'Выручка']]
-            report.append("\n🏆 *Топ-5 товаров:*")
-            for _, row in top_products.iterrows():
-                report.append(f"  • {row[detected['product_col']]}: {row['Выручка']} ₽")
+            # Топ‑5 продуктов по выручке
+            if prod_col:
+                top_prod = df.groupby(prod_col)['Выручка'].sum().nlargest(5)
+                fig, ax = plt.subplots(figsize=(8,5))
+                sns.barplot(x=top_prod.values, y=top_prod.index.astype(str), ax=ax)
+                ax.set_title("Топ‑5 продуктов по выручке")
+                plt.tight_layout()
+                path_prod = os.path.join(
+                    os.path.dirname(file_path),
+                    f"top5_prod_{uuid.uuid4().hex}.png"
+                )
+                fig.savefig(path_prod); plt.close(fig)
+                plots.append(path_prod)
 
-        # Визуализация
-        plt.figure()
-        sns.barplot(data=df, x=detected['category_col'], y='Выручка', estimator=sum)
-        plt.title('Выручка по категориям')
-        plot_path = 'sales_by_category.png'
-        plt.savefig(plot_path)
-        plots.append(plot_path)
+        # Временные метрики
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            valid_dates = df[date_col].dropna()
+            if not valid_dates.empty:
+                report.append("\n*Временные метрики:*")
+                report.append(f"  • Первая дата: {valid_dates.min().date()}")
+                report.append(f"  • Последняя дата: {valid_dates.max().date()}")
+                report.append(f"  • Всего периодов: {valid_dates.nunique()}")
 
         return "\n".join(report), plots
 
     except Exception as e:
-        return f"❌ Ошибка: {str(e)}", []
-    finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        return f"❌ Ошибка при формировании отчета: {e}", []

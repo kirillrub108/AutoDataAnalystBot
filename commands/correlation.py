@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from utils.file_processing import save_temp_file, remove_temp_directory_by_file, remove_temp_directory_by_msg, get_columns_list, get_numeric_columns
-from utils.correlation_logic import build_correlation_plot
+from utils.chart_generation import build_correlation_plot
 
 router = Router()
 
@@ -20,8 +20,7 @@ class CorrelationStates(StatesGroup):
 async def cmd_correlation(message: Message, state: FSMContext):
     await state.set_state(CorrelationStates.waiting_for_file)
     await message.answer(
-        "📈 Пришлите Excel-файл (.xlsx), чтобы построить диаграмму корреляции между двумя числовыми столбцами.\n"
-        "🔹Отправьте /cancel для *отмены*.",
+        "📈 Пришлите Excel-файл (.xlsx), чтобы построить график корреляции между двумя числовыми столбцами.\n",
         reply_markup=ReplyKeyboardRemove()
     )
 
@@ -79,10 +78,11 @@ async def handle_first_column(message: Message, state: FSMContext):
 async def handle_second_column(message: Message, state: FSMContext):
     data = await state.get_data()
     file_path = data["file_path"]
+    columns = data["columns"]
     col1 = data["col1"]
     col2 = message.text.strip()
 
-    if col2 not in data["columns"]:
+    if col2 not in columns:
         await message.answer("⚠️ Пожалуйста, выберите столбец из списка.")
         return
 
@@ -93,31 +93,30 @@ async def handle_second_column(message: Message, state: FSMContext):
     try:
         image_path = build_correlation_plot(file_path, col1, col2)
     except ValueError as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
         await message.answer(f"❌ {e}")
-        await state.clear()
         return
     except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
         await message.answer(f"❌ Ошибка при построении графика: {e}")
-        await state.clear()
         return
 
-        # Отправляем PNG-изображение через FSInputFile
+    # Отправляем график
     photo = FSInputFile(path=image_path)
     await message.answer_photo(
         photo=photo,
         caption=f"📊 Корреляция между «{col1}» и «{col2}»"
     )
 
-    # Чистим временные файлы и сбрасываем FSM
-    if os.path.exists(file_path):
-        os.remove(file_path)
-    await state.clear()
+    # Предлагаем снова выбрать столбцы
+    keyboard_buttons = [KeyboardButton(text=col) for col in columns]
+    grouped_buttons = [keyboard_buttons[i:i + 3] for i in range(0, len(keyboard_buttons), 3)]
+
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=grouped_buttons,
+        resize_keyboard=True
+    )
+
+    await state.set_state(CorrelationStates.waiting_for_first_column)
     await message.answer(
-        "✅ Готово! Для нового анализа отправьте /correlation\n"
-        "🔹Отправьте /cancel для *отмены*.",
-        reply_markup=ReplyKeyboardRemove()
+        "🔁 Хотите построить другой график?\nВыберите *первый* столбец:",
+        reply_markup=keyboard
     )

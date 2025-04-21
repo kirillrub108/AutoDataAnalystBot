@@ -6,6 +6,29 @@ from uuid import uuid4
 TEMP_DIR = "temp_files"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+# Автоматическое определение колонок по ключевым словам
+def detect_columns(df: pd.DataFrame) -> dict:
+    columns = {
+        'date_col': None,
+        'price_col': None,
+        'quantity_col': None,
+        'category_col': None,
+        'product_col': None
+    }
+    for col in df.columns:
+        col_lower = col.lower()
+        if any(word in col_lower for word in ['дата', 'date']):
+            columns['date_col'] = col
+        if any(word in col_lower for word in ['цена', 'price']):
+            columns['price_col'] = col
+        if any(word in col_lower for word in ['количество', 'quantity']):
+            columns['quantity_col'] = col
+        if any(word in col_lower for word in ['категория', 'category']):
+            columns['category_col'] = col
+        if any(word in col_lower for word in ['товар', 'product']):
+            columns['product_col'] = col
+    return columns
+
 def get_columns_list(file_path: str) -> list[str]:
     df = pd.read_excel(file_path)
     return df.columns.tolist()
