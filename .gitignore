@@ -1,3 +1,5 @@
 /temp_files/
 /logs/
 .env
+__pycache__/
+*.pyc
