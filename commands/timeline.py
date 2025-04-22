@@ -73,12 +73,13 @@ async def handle_value_column(message: Message, state: FSMContext):
     date_col = data["date_col"]
 
     try:
-        image_path = build_time_series_plot(file_path, date_col, value_col)
-        photo = FSInputFile(path=image_path)
-        await message.answer_photo(
-            photo=photo,
-            caption=f"📊 Временной ряд по столбцу «{value_col}»"
-        )
+        image_paths = build_time_series_plot(file_path, date_col, value_col)
+        for path in image_paths:
+            photo = FSInputFile(path=path)
+            await message.answer_photo(
+                photo=photo,
+                caption=f"📊 Временной ряд по столбцу «{value_col}»"
+            )
 
         # Снова предлагаем выбрать столбец
         keyboard_buttons = [KeyboardButton(text=col) for col in numeric_cols]

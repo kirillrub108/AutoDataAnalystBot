@@ -16,30 +16,41 @@ from utils.file_processing import save_temp_file, get_numeric_columns, detect_co
 async def analyze_columns(message: Message, df: pd.DataFrame, df_columns: list, text: str):
     text = text.strip()
 
-    # Разбор запроса: столбец или столбец:top_n
-    requests = []
+    # Словарь для сопоставления lower‑версии имени столбца → оригинальное имя
+    col_map = {col.lower(): col for col in df_columns}
+
+    # Разбор запроса: столбец или столбец:top_n (регистр игнорируется)
+    requests: list[tuple[str, int|None]] = []
     for token in text.split(","):
         token = token.strip()
         if not token:
             continue
+
         if ":" in token:
-            col, n = token.split(":", 1)
+            col_token, n = token.split(":", 1)
+            col_key = col_token.strip().lower()
+            top_n = None
             try:
                 top_n = int(n.strip())
             except ValueError:
                 top_n = None
-            requests.append((col.strip(), top_n))
         else:
-            requests.append((token, None))
+            col_key = token.lower()
+            top_n = None
 
-    # Проверка наличия столбцов
-    invalid = [col for col, _ in requests if col not in df_columns]
+        # Пытаемся найти реальное имя столбца
+        real_col = col_map.get(col_key)
+        requests.append((real_col, top_n) if real_col else (None, top_n))
+
+    # Проверяем, какие столбцы не найдены
+    invalid = [tok for tok, _ in requests if tok is None]
     if invalid:
         await message.answer(
             f"❌ Не найден(ы) столбец(ы): {', '.join(invalid)}. Пожалуйста, проверьте и попробуйте снова."
         )
         return
 
+    # Для каждого валидного запроса выводим аналитику
     for col, top_n in requests:
         column_data = df[col]
         missing = column_data.isna().sum()
