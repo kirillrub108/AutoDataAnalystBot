@@ -1,12 +1,12 @@
 import asyncio, logging
 import os
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from middlewares.logger import LoggingMiddleware
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage  # хранение состояний в памяти
 
-from config import API_TOKEN
 from middlewares.cleanup import CleanupMiddleware
 from commands import start, cancel, correlation, report, aggregate, diagram, timeline, feedback
 
@@ -14,6 +14,9 @@ logging.basicConfig(level=logging.INFO)
 
 LOGS_DIR = "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
+
+load_dotenv()
+API_TOKEN = os.getenv("API_TOKEN")
 
 # Настраиваем бот с ParseMode и FSM-хранилищем
 bot = Bot(
