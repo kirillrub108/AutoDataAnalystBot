@@ -31,11 +31,19 @@ async def handle_report(message: Message, state: FSMContext):
         await state.clear()
         return
 
+    await message.answer(
+        "Отчет генерируется\n" \
+        "Пожалуйста подождите",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
     # Генерация отчета и диаграмм
     report_text, plots = generate_report(file_path)
 
     # Отправляем текст отчета
-    await message.answer(report_text, parse_mode=ParseMode.MARKDOWN)
+    MAX_LEN = 4000
+    for i in range(0, len(report_text), MAX_LEN):
+        await message.answer(report_text[i:i + MAX_LEN], parse_mode=ParseMode.MARKDOWN)
 
     # Отправляем диаграммы
     for plot_path in plots:

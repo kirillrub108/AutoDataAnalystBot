@@ -50,5 +50,5 @@ async def process_columns(message: Message, state: FSMContext):
     await message.answer(
         "🔁 Хотите продолжить?\n"
         "Введите другие столбцы через запятую",
-        reply_markup=kb
+        reply_markup=ReplyKeyboardRemove()
     )

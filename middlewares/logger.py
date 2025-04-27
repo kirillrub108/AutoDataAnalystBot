@@ -25,7 +25,7 @@ class LoggingMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         # Формируем строку лога
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_line = f"{timestamp} | {action}\n"
 
         # Пишем в файл

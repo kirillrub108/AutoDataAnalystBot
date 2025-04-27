@@ -43,10 +43,10 @@ async def analyze_columns(message: Message, df: pd.DataFrame, df_columns: list, 
         requests.append((real_col, top_n) if real_col else (None, top_n))
 
     # Проверяем, какие столбцы не найдены
-    invalid = [tok for tok, _ in requests if tok is None]
+    invalid = [col for tok, col in requests if tok is None]
     if invalid:
         await message.answer(
-            f"❌ Не найден(ы) столбец(ы): {', '.join(invalid)}. Пожалуйста, проверьте и попробуйте снова."
+            f"❌ Не найден(ы) столбец(ы): {', '.join(filter(None, invalid))}. Пожалуйста, проверьте и попробуйте снова."
         )
         return
 

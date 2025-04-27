@@ -10,7 +10,7 @@ class CleanupMiddleware(BaseMiddleware):
         current_state = await state.get_state()
 
         if event.text and event.text.startswith("/") and current_state:
-            remove_temp_directory_by_msg(event)
+            # remove_temp_directory_by_msg(event)
             await state.clear()
 
         return await handler(event, data)
